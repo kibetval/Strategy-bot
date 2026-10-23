@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Structure Pro - Live Chart & Price Action Bot</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- TradingView Lightweight Charts Library -->
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body { background-color: #0b0e14; color: #f1f5f9; }
+        .chart-container { width: 100%; height: 500px; position: relative; }
+    </style>
+</head>
+<body class="p-4 md:p-8 flex justify-center">
+
+    <div class="w-full max-w-6xl flex flex-col gap-6">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-4 gap-4">
+            <div>
+                <h1 class="text-2xl font-black tracking-wider text-emerald-400">MARKET STRUCTURE PRO</h1>
+                <p class="text-xs text-slate-400">Real-time Forex Charting &bull; HH, HL, LH, LL Detection &bull; Live Entry, SL, TP Overlays</p>
+            </div>
+            <div class="flex gap-2 w-full md:w-auto">
+                <input type="password" id="apiKey" placeholder="Twelve Data API Key" class="bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-sm w-full md:w-64 focus:outline-none focus:border-emerald-500">
+                <button id="loadBtn" class="bg-emerald-600 hover:bg-emerald-500 font-bold px-4 py-1.5 rounded text-sm transition text-white">Stream Live</button>
+            </div>
+        </header>
+
+        <!-- Controls Row -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg">
+                <label class="text-xs text-slate-400 block mb-1">Currency Pair</label>
+                <select id="pairSelect" class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-sm">
+                    <option value="EUR/USD">EUR/USD</option>
+                    <option value="GBP/USD">GBP/USD</option>
+                    <option value="USD/JPY">USD/JPY</option>
+                    <option value="XAU/USD">XAU/USD (Gold)</option>
+                    <option value="AUD/USD">AUD/USD</option>
+                </select>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg">
+                <label class="text-xs text-slate-400 block mb-1">Timeframe</label>
+                <select id="timeframeSelect" class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-sm">
+                    <option value="1min">1 Minute</option>
+                    <option value="5min" selected>5 Minutes</option>
+                    <option value="15min">15 Minutes</option>
+                    <option value="1h">1 Hour</option>
+                </select>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg col-span-2 flex flex-col justify-between">
+                <span class="text-xs text-slate-400">Live Connection Status</span>
+                <div id="statusText" class="text-sm font-bold text-amber-400">Waiting for API Key &amp; Connection...</div>
+            </div>
+        </div>
+
+        <!-- Main Chart Section -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col gap-4">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-sm tracking-wide text-slate-200">LIVE PRICE CHART &amp; STRUCTURE</h3>
+                <div id="structureBias" class="text-xs font-bold px-3 py-1 rounded bg-slate-800 text-slate-400">Market Bias: Analyzing...</div>
+            </div>
+            <!-- TradingView Chart Container -->
+            <div id="chartContainer" class="chart-container"></div>
+        </div>
+
+        <!-- Trade Setup & Structure Analytics Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Market Structure Points -->
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col gap-3">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Detected Structure Pivots</h4>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="bg-slate-800 p-2 rounded">
+                        <span class="text-xs text-slate-400 block">Latest Peak</span>
+                        <strong id="latestPeak" class="text-emerald-400">—</strong>
+                    </div>
+                    <div class="bg-slate-800 p-2 rounded">
+                        <span class="text-xs text-slate-400 block">Latest Trough</span>
+                        <strong id="latestTrough" class="text-red-400">—</strong>
+                    </div>
+                </div>
+                <div id="structureDesc" class="text-xs text-slate-400 mt-2">Scanning candle history for swing highs and swing lows...</div>
+            </div>
+
+            <!-- Active Trade Setup (Entry, SL, TP) -->
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col gap-3 md:col-span-2">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Automated Trade Execution Levels</h4>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                    <div class="bg-slate-800 p-2.5 rounded border-l-4 border-blue-500">
+                        <span class="text-xs text-slate-400 block">Signal Direction</span>
+                        <strong id="tradeSignal" class="text-blue-400 text-base">STANDBY</strong>
+                    </div>
+                    <div class="bg-slate-800 p-2.5 rounded">
+                        <span class="text-xs text-slate-400 block">Entry Price</span>
+                        <strong id="tradeEntry" class="text-slate-100 text-base">—</strong>
+                    </div>
+                    <div class="bg-slate-800 p-2.5 rounded border-l-4 border-red-500">
+                        <span class="text-xs text-slate-400 block">Stop Loss (SL)</span>
+                        <strong id="tradeSL" class="text-red-400 text-base">—</strong>
+                    </div>
+                    <div class="bg-slate-800 p-2.5 rounded border-l-4 border-emerald-500">
+                        <span class="text-xs text-slate-400 block">Take Profit (TP)</span>
+                        <strong id="tradeTP" class="text-emerald-400 text-base">—</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let chart, candleSeries;
+        let lineEntry = null, lineSL = null, lineTP = null;
+
+        // Initialize TradingView Lightweight Chart
+        function initChart() {
+            const container = document.getElementById('chartContainer');
+            container.innerHTML = '';
+            
+            chart = LightweightCharts.createChart(container, {
+                width: container.clientWidth,
+                height: 500,
+                layout: {
+                    background: { type: 'solid', color: '#0f172a' },
+                    textColor: '#94a3b8',
+                },
+                grid: {
+                    vertLines: { color: '#1e293b' },
+                    horzLines: { color: '#1e293b' },
+                },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                rightPriceScale: { borderColor: '#334155' },
+                timeScale: { borderColor: '#334155', timeVisible: true },
+            });
+
+            candleSeries = chart.addCandlestickSeries({
+                upColor: '#22c55e',
+                downColor: '#ef4444',
+                borderVisible: false,
+                wickUpColor: '#22c55e',
+                wickDownColor: '#ef4444',
+            });
+
+            window.addEventListener('resize', () => {
+                chart.applyOptions({ width: container.clientWidth });
+            });
+        }
+
+        document.getElementById('loadBtn').addEventListener('click', fetchLiveData);
+
+        async function fetchLiveData() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const symbol = document.getElementById('pairSelect').value;
+            const interval = document.getElementById('timeframeSelect').value;
+            const statusText = document.getElementById('statusText');
+
+            if (!apiKey) {
+                alert('Please enter your Twelve Data API key.');
+                return;
+            }
+
+            statusText.textContent = 'Fetching real market data from Twelve Data...';
+            statusText.className = 'text-sm font-bold text-blue-400';
+
+            const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=${interval}&outputsize=150&apikey=${apiKey}`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.status === 'error' || !data.values) {
+                    throw new Error(data.message || 'Failed to fetch live data.');
+                }
+
+                // Format candles for TradingView (ascending order by time)
+                const rawCandles = data.values.reverse();
+                const formattedCandles = rawCandles.map(c => ({
+                    time: new Date(c.datetime).getTime() / 1000,
+                    open: parseFloat(c.open),
+                    high: parseFloat(c.high),
+                    low: parseFloat(c.low),
+                    close: parseFloat(c.close)
+                }));
+
+                if(!chart) initChart();
+                candleSeries.setData(formattedCandles);
+                chart.timeScale().fitContent();
+
+                statusText.textContent = `Live Feed Active (${symbol} - ${interval})`;
+                statusText.className = 'text-sm font-bold text-emerald-400';
+
+                // Run Market Structure & Trade Plan calculations
+                analyzeMarketStructure(formattedCandles);
+
+            } catch (err) {
+                statusText.textContent = `Error: ${err.message}`;
+                statusText.className = 'text-sm font-bold text-red-500';
+            }
+        }
+
+        // Market Structure (HH, HL, LH, LL) and Trade Plan Calculator
+        function analyzeMarketStructure(candles) {
+            let highs = [];
+            let lows = [];
+
+            // Simple Fractal Swing High / Low detector (looking 2 bars left and right)
+            for (let i = 2; i < candles.length - 2; i++) {
+                if (candles[i].high > candles[i-1].high && candles[i].high > candles[i-2].high &&
+                    candles[i].high > candles[i+1].high && candles[i].high > candles[i+2].high) {
+                    highs.push({ price: candles[i].high, time: candles[i].time });
+                }
+                if (candles[i].low < candles[i-1].low && candles[i].low < candles[i-2].low &&
+                    candles[i].low < candles[i+1].low && candles[i].low < candles[i+2].low) {
+                    lows.push({ price: candles[i].low, time: candles[i].time });
+                }
+            }
+
+            const latestHigh = highs.length > 0 ? highs[highs.length - 1].price : candles[candles.length - 1].high;
+            const prevHigh = highs.length > 1 ? highs[highs.length - 2].price : latestHigh;
+            const latestLow = lows.length > 0 ? lows[lows.length - 1].price : candles[candles.length - 1].low;
+            const prevLow = lows.length > 1 ? lows[lows.length - 2].price : latestLow;
+
+            // Structure labeling
+            const isHH = latestHigh > prevHigh;
+            const isHL = latestLow > prevLow;
+            
+            document.getElementById('latestPeak').textContent = `${latestHigh.toFixed(5)} (${isHH ? 'Higher High / HH' : 'Lower High / LH'})`;
+            document.getElementById('latestTrough').textContent = `${latestLow.toFixed(5)} (${isHL ? 'Higher Low / HL' : 'Lower Low / LL'})`;
+
+            const biasEl = document.getElementById('structureBias');
+            const signalEl = document.getElementById('tradeSignal');
+            const entryEl = document.getElementById('tradeEntry');
+            const slEl = document.getElementById('tradeSL');
+            const tpEl = document.getElementById('tradeTP');
+
+            const currentClose = candles[candles.length - 1].close;
+
+            if (isHH && isHL) {
+                biasEl.textContent = 'Market Structure: BULLISH (HH + HL)';
+                biasEl.className = 'text-xs font-bold px-3 py-1 rounded bg-emerald-950 text-emerald-400 border border-emerald-800';
+                
+                signalEl.textContent = 'BUY';
+                signalEl.className = 'text-emerald-400 text-base font-bold';
+                
+                let entry = currentClose;
+                let sl = latestLow - 0.0010;
+                let tp = entry + ((entry - sl) * 2.0); // 1:2 R:R
+
+                entryEl.textContent = entry.toFixed(5);
+                slEl.textContent = sl.toFixed(5);
+                tpEl.textContent = tp.toFixed(5);
+
+                updateChartLines(entry, sl, tp);
+            } else {
+                biasEl.textContent = 'Market Structure: BEARISH (LH + LL)';
+                biasEl.className = 'text-xs font-bold px-3 py-1 rounded bg-red-950 text-red-400 border border-red-800';
+                
+                signalEl.textContent = 'SELL';
+                signalEl.className = 'text-red-400 text-base font-bold';
+
+                let entry = currentClose;
+                let sl = latestHigh + 0.0010;
+                let tp = entry - ((sl - entry) * 2.0); // 1:2 R:R
+
+                entryEl.textContent = entry.toFixed(5);
+                slEl.textContent = sl.toFixed(5);
+                tpEl.textContent = tp.toFixed(5);
+
+                updateChartLines(entry, sl, tp);
+            }
+
+            document.getElementById('structureDesc').textContent = `Analyzed ${candles.length} closed bars. Structure identified via swing pivot tracking.`;
+        }
+
+        // Draw Entry, SL, TP lines directly on the TradingView chart
+        function updateChartLines(entry, sl, tp) {
+            if (lineEntry) candleSeries.removePriceLine(lineEntry);
+            if (lineSL) candleSeries.removePriceLine(lineSL);
+            if (lineTP) candleSeries.removePriceLine(lineTP);
+
+            lineEntry = candleSeries.createPriceLine({
+                price: entry,
+                color: '#3b82f6',
+                lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Solid,
+                axisLabelVisible: true,
+                title: 'ENTRY',
+            });
+
+            lineSL = candleSeries.createPriceLine({
+                price: sl,
+                color: '#ef4444',
+                lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: 'STOP LOSS',
+            });
+
+            lineTP = candleSeries.createPriceLine({
+                price: tp,
+                color: '#22c55e',
+                lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: 'TAKE PROFIT',
+            });
+        }
+    </script>
+</body>
+</html>
